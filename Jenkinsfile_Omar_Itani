@@ -24,7 +24,7 @@ pipeline {
     stage('Lint') {
       steps {
         echo "Running flake8 (lint)..."
-        // Allow pipeline to continue even if flake8 finds issues
+        // non-blocking lint so style warnings don't kill the build
         bat "call %ACTIVATE% && flake8 app.py || exit /b 0"
       }
     }
