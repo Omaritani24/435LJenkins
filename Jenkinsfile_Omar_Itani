@@ -4,7 +4,7 @@ pipeline {
     VENV = 'venv'
     ACTIVATE = "%WORKSPACE%\\%VENV%\\Scripts\\activate"
   }
-  options { ansiColor('xterm'); timestamps() }
+  options { timestamps() }
 
   stages {
     stage('Setup') {
@@ -41,7 +41,7 @@ pipeline {
       }
       post {
         always {
-          publishHTML(target: [allowMissing: true, alwaysLinkToLastBuild: true, keepAll: true, reportDir: 'htmlcov', reportFiles: 'index.html', reportName: 'Coverage Report'])
+          // If HTML Publisher isn't installed, just archive the folder.
           archiveArtifacts artifacts: 'htmlcov/**', onlyIfSuccessful: false
         }
       }
@@ -54,7 +54,6 @@ pipeline {
       }
       post {
         always {
-          publishHTML(target: [allowMissing: true, alwaysLinkToLastBuild: true, keepAll: true, reportDir: '.', reportFiles: 'bandit-report.html', reportName: 'Bandit Security Report'])
           archiveArtifacts artifacts: 'bandit-report.html', onlyIfSuccessful: false
         }
       }
