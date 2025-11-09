@@ -1,0 +1,77 @@
+pipeline {
+  agent any
+  environment {
+    VENV = 'venv'
+    ACTIVATE = "%WORKSPACE%\\%VENV%\\Scripts\\activate"
+  }
+  options { ansiColor('xterm'); timestamps() }
+
+  stages {
+    stage('Setup') {
+      steps {
+        bat """
+          if not exist %VENV% python -m venv %VENV%
+          call %ACTIVATE%
+          pip install --upgrade pip
+          pip install -r requirements.txt
+        """
+      }
+    }
+
+    stage('Lint') {
+      steps {
+        bat "call %ACTIVATE% && flake8 app.py"
+      }
+    }
+
+    stage('Test') {
+      steps {
+        bat "call %ACTIVATE% && pytest -q"
+      }
+    }
+
+    stage('Coverage') {
+      steps {
+        bat """
+          call %ACTIVATE%
+          coverage run -m pytest
+          coverage html
+          coverage report -m
+        """
+      }
+      post {
+        always {
+          publishHTML(target: [allowMissing: true, alwaysLinkToLastBuild: true, keepAll: true, reportDir: 'htmlcov', reportFiles: 'index.html', reportName: 'Coverage Report'])
+          archiveArtifacts artifacts: 'htmlcov/**', onlyIfSuccessful: false
+        }
+      }
+    }
+
+    stage('Security Scan') {
+      steps {
+        // don't fail the build on findings
+        bat "call %ACTIVATE% && bandit -r . -f html -o bandit-report.html || exit /b 0"
+      }
+      post {
+        always {
+          publishHTML(target: [allowMissing: true, alwaysLinkToLastBuild: true, keepAll: true, reportDir: '.', reportFiles: 'bandit-report.html', reportName: 'Bandit Security Report'])
+          archiveArtifacts artifacts: 'bandit-report.html', onlyIfSuccessful: false
+        }
+      }
+    }
+
+    stage('Deploy') {
+      steps {
+        bat """
+          if exist dist rmdir /s /q dist
+          mkdir dist
+          copy app.py dist\\
+          echo Deployed to dist\\
+        """
+      }
+      post { always { archiveArtifacts artifacts: 'dist/**', onlyIfSuccessful: false } }
+    }
+  }
+
+  post { always { cleanWs() } }
+}
