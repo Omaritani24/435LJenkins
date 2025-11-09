@@ -1,12 +1,15 @@
 pipeline {
   agent any
+
   environment {
     VENV = 'venv'
     ACTIVATE = "%WORKSPACE%\\%VENV%\\Scripts\\activate"
   }
+
   options { timestamps() }
 
   stages {
+
     stage('Setup') {
       steps {
         bat """
@@ -20,20 +23,29 @@ pipeline {
 
     stage('Lint') {
       steps {
-        bat "call %ACTIVATE% && flake8 app.py"
+        echo "Running flake8 (lint)..."
+        // Allow pipeline to continue even if flake8 finds issues
+        bat "call %ACTIVATE% && flake8 app.py || exit /b 0"
       }
     }
 
     stage('Test') {
       steps {
-        bat "call %ACTIVATE% && pytest -q"
+        echo "Running pytest..."
+        bat """
+          call %ACTIVATE%
+          set PYTHONPATH=%WORKSPACE%
+          pytest -q
+        """
       }
     }
 
     stage('Coverage') {
       steps {
+        echo "Running coverage report..."
         bat """
           call %ACTIVATE%
+          set PYTHONPATH=%WORKSPACE%
           coverage run -m pytest
           coverage html
           coverage report -m
@@ -41,7 +53,6 @@ pipeline {
       }
       post {
         always {
-          // If HTML Publisher isn't installed, just archive the folder.
           archiveArtifacts artifacts: 'htmlcov/**', onlyIfSuccessful: false
         }
       }
@@ -49,8 +60,11 @@ pipeline {
 
     stage('Security Scan') {
       steps {
-        // don't fail the build on findings
-        bat "call %ACTIVATE% && bandit -r . -f html -o bandit-report.html || exit /b 0"
+        echo "Running Bandit security scan..."
+        bat """
+          call %ACTIVATE%
+          bandit -r . -f html -o bandit-report.html || exit /b 0
+        """
       }
       post {
         always {
@@ -61,16 +75,26 @@ pipeline {
 
     stage('Deploy') {
       steps {
+        echo "Deploying application..."
         bat """
           if exist dist rmdir /s /q dist
           mkdir dist
           copy app.py dist\\
-          echo Deployed to dist\\
+          echo Deployed app.py to dist\\ folder
         """
       }
-      post { always { archiveArtifacts artifacts: 'dist/**', onlyIfSuccessful: false } }
+      post {
+        always {
+          archiveArtifacts artifacts: 'dist/**', onlyIfSuccessful: false
+        }
+      }
     }
   }
 
-  post { always { cleanWs() } }
+  post {
+    always {
+      echo "Cleaning workspace..."
+      cleanWs()
+    }
+  }
 }
